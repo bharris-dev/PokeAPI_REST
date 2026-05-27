@@ -1,4 +1,6 @@
 import requests
+import os
+import json
 from dataclasses import dataclass
 
 base_url = "https://pokeapi.co/api/v2"
@@ -15,16 +17,53 @@ class Pokemon:
     special_defence = 0
     moves = {}
 
-def get_pokemon_info(name):
-    url = f"{base_url}/pokemon/{name}"
-    response = requests.get(url)
+@dataclass
+class Move:
+    name: str = ""
+    accuracy: int = 0
+    damage_type: str = ""
 
+##########################
+# General Data Functions #
+##########################
+
+def get_api_data(url):
+    response = requests.get(url)
     if response.status_code == 200:
-        pokemon_data = response.json()
-        return pokemon_data
+        data = response.json()
+        return data
     else:
         print(f"Error code: {response.status_code}")
         return None
+
+def find_json_file(file_name):
+    return os.path.exists(file_name)
+
+
+
+#########
+# MOVES #
+#########
+def import_all_moves():
+    moves_url = f"{base_url}/move?limit=10000"
+    if find_json_file('moves.json'):
+        # TO-DO -> Read moves from 'moves.json'
+        print("Moves imported successfully")
+        pass
+    else:
+        moves_data = get_api_data(moves_url)
+        with open('moves.json', 'w') as outfile:
+            json.dump(moves_data, outfile, indent=4)
+        print("moves.json created successfully")
+
+###########
+# POKEMON #
+###########
+
+def get_pokemon_info(name):
+    pokemon_url = f"{base_url}/pokemon/{name}"
+    pokemon_data = get_api_data(pokemon_url)
+    return pokemon_data
 
 def assign_pokemon(poke_info):
     current_pokemon: Pokemon = Pokemon()
@@ -59,9 +98,17 @@ def assign_pokemon(poke_info):
 
     moves = {}
     for move in pokemon_info["moves"]:
-        move_name = move["name"]
+        move_name = move["move"]["name"]
+        print(move_name)
 
     print(current_pokemon)
+
+
+########
+# MAIN #
+########
+
+import_all_moves()
 
 pokemon_name = input("Input pokemon name: ").lower()
 pokemon_info = get_pokemon_info(pokemon_name)
