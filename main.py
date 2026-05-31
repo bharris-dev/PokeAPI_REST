@@ -1,4 +1,5 @@
-import requests
+import aiohttp
+import asyncio
 import os
 import json
 from dataclasses import dataclass
@@ -27,39 +28,60 @@ class Move:
 # General Data Functions #
 ##########################
 
-def get_api_data(url):
-    response = requests.get(url)
-    if response.status_code == 200:
-        data = response.json()
-        return data
-    else:
-        print(f"Error code: {response.status_code}")
-        return None
-
 def find_json_file(file_name):
     return os.path.exists(file_name)
 
-
+async def get_api_data(session, url):
+    async with session.get(url) as r:
+        return await r.json()
 
 #########
 # MOVES #
 #########
-def import_all_moves():
+async def import_all_moves():
     moves_url = f"{base_url}/move?limit=10000"
+
     if find_json_file('moves.json'):
-        # TO-DO -> Read moves from 'moves.json'
-        print("Moves imported successfully")
-        pass
-    else:
-        moves_data = get_api_data(moves_url)
+        with open('moves.json', 'r') as file:
+            print("Moves loaded from file successfully")
+            return moves_data_class(json.load(file))
+
+    async with aiohttp.ClientSession() as session:
+
+        moves_data = await get_api_data(session, moves_url)
+
+        tasks = []
+        for m in moves_data["results"]:
+            tasks.append(get_api_data(session, m["url"]))
+        details = await asyncio.gather(*tasks)
+
+        for move, d in zip(moves_data["results"], details):
+            move["accuracy"] = d["accuracy"]
+            move["damage_type"] = d["damage_class"]["name"]
+
         with open('moves.json', 'w') as outfile:
             json.dump(moves_data, outfile, indent=4)
+
         print("moves.json created successfully")
+        return moves_data_class(moves_data)
+
+def moves_data_class(data):
+    poke_moves = {}
+
+    for m in data["results"]:
+        move = Move()
+        move.name = m["name"]
+        move.accuracy = m["accuracy"]
+        move.damage_type = m["damage_type"]
+        poke_moves[move.name] = move
+
+    return poke_moves
+
 
 ###########
 # POKEMON #
 ###########
-
+"""
 def get_pokemon_info(name):
     pokemon_url = f"{base_url}/pokemon/{name}"
     pokemon_data = get_api_data(pokemon_url)
@@ -102,13 +124,15 @@ def assign_pokemon(poke_info):
         print(move_name)
 
     print(current_pokemon)
-
+"""
 
 ########
 # MAIN #
 ########
 
-import_all_moves()
+moves = asyncio.run(import_all_moves())
+pokemon = ""
+"""
 
 pokemon_name = input("Input pokemon name: ").lower()
 pokemon_info = get_pokemon_info(pokemon_name)
@@ -121,3 +145,5 @@ if pokemon_info:
     assign_pokemon(pokemon_info)
 else:
     print("Pokémon not found or API error.")
+
+"""
