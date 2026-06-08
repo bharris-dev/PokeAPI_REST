@@ -2,7 +2,7 @@ import aiohttp
 import asyncio
 import os
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 base_url = "https://pokeapi.co/api/v2"
 
@@ -10,13 +10,13 @@ base_url = "https://pokeapi.co/api/v2"
 class Pokemon:
     id: int = 0
     name: str = ""
-    types: list[str] = None
+    types: dict = field(default_factory=dict)
     hp: int = 0
     attack: int = 0
-    special_attack = 0
+    special_attack: int = 0
     defence: int = 0
-    special_defence = 0
-    moves = {}
+    special_defence: int = 0
+    moves: dict = field(default_factory=dict)
 
 @dataclass
 class Move:
@@ -39,7 +39,8 @@ async def get_api_data(session, url):
 # MOVES #
 #########
 async def import_all_moves():
-    moves_url = f"{base_url}/move?limit=10000"
+    moves_url = f"{base_url}/move?limit=2000"
+    print("Retrieving move data...")
 
     if find_json_file('moves.json'):
         with open('moves.json', 'r') as file:
@@ -81,69 +82,100 @@ def moves_data_class(data):
 ###########
 # POKEMON #
 ###########
-"""
-def get_pokemon_info(name):
-    pokemon_url = f"{base_url}/pokemon/{name}"
-    pokemon_data = get_api_data(pokemon_url)
-    return pokemon_data
 
-def assign_pokemon(poke_info):
-    current_pokemon: Pokemon = Pokemon()
+async def import_all_pokemon(moves):
+    pokemon_url = f"{base_url}/pokemon?limit=2000"
+    print("Retrieving pokemon data...")
 
-    current_pokemon.id = pokemon_info['id']
-    current_pokemon.name = pokemon_info['name']
-    current_pokemon.types = pokemon_info['types']
+    if find_json_file('pokemon.json'):
+        with open('pokemon.json', 'r') as file:
+            print("Pokemon loaded from file successfully")
+            return pokemon_data_class(json.load(file), moves)
 
-    types: list = []
+    async with aiohttp.ClientSession() as session:
 
-    for t in pokemon_info["types"]:
-        type_name = t["type"]["name"]
-        types.append(type_name)
+        pokemon_data = await get_api_data(session, pokemon_url)
 
-    current_pokemon.types = types
+        tasks = []
+        for p in pokemon_data["results"]:
+            tasks.append(get_api_data(session, p["url"]))
+        details = await asyncio.gather(*tasks)
 
-    stats = {}
+        # Joins the data from https://pokeapi.co/api/v2/pokemon?limit=100000 and the individual pokemon (i.e. https://pokeapi.co/api/v2/pokemon/1/ (Bulbasaur)) together.
+        for pkmn, api_data in zip(pokemon_data["results"], details):
+            pkmn["id"] = api_data["id"]
+            pkmn["name"] = api_data["name"]
+            pkmn["height"] = api_data["height"]
 
-    # Dict Key
-    for stat in pokemon_info["stats"]:
-        stat_name = stat["stat"]["name"]
-        stat_value = stat["base_stat"]
+            pkmn["types"] = []
+            for t in api_data["types"]:
+                pkmn["types"].append(t["type"]["name"])
 
-        stats[stat_name] = stat_value
+            pkmn["stats"] = api_data["stats"]
+            pkmn["abilities"] = api_data["abilities"]
 
-    # Dict value
-    current_pokemon.hp = stats["hp"]
-    current_pokemon.attack = stats["attack"]
-    current_pokemon.special_attack = stats["special-attack"]
-    current_pokemon.defence = stats["defense"]
-    current_pokemon.special_defence = stats["special-defense"]
+            pkmn["move_names"] = []
+            for m in api_data["moves"]:
+                pkmn["move_names"].append(m["move"]["name"])
 
-    moves = {}
-    for move in pokemon_info["moves"]:
-        move_name = move["move"]["name"]
-        print(move_name)
+        with open('pokemon.json', 'w') as outfile:
+            json.dump(pokemon_data, outfile, indent=4)
 
-    print(current_pokemon)
-"""
+        print("pokemon.json created successfully")
+        return pokemon_data_class(pokemon_data, moves)
+
+def pokemon_data_class(data, moves):
+    poke_list = {}
+
+    for p in data["results"]:
+        poke = Pokemon()
+        poke.id = p["id"]
+        poke.name = p["name"]
+        # poke.types = p["types"]
+        # Had to do it this way because of how it's written in the api
+        # i.e. {
+        #       "base_stat": 45,
+        #       "effort": 0,
+        #       "stat": {
+        #         "name": "hp",
+        #         "url": "https://pokeapi.co/api/v2/stat/1/"
+        #       }
+        for poke_stat in p["stats"]:
+            if poke_stat["stat"]["name"] == "hp":
+                poke.hp = poke_stat["base_stat"]
+            if poke_stat["stat"]["name"] == "attack":
+                poke.attack = poke_stat["base_stat"]
+            if poke_stat["stat"]["name"] == "defense":
+                poke.defence = poke_stat["base_stat"]
+            if poke_stat["stat"]["name"] == "special-attack":
+                poke.special_attack = poke_stat["base_stat"]
+            if poke_stat["stat"]["name"] == "special-defense":
+                poke.special_defence = poke_stat["base_stat"]
+
+        for move_name in p["move_names"]:
+            if move_name in moves:
+                poke.moves[move_name] = moves[move_name]
+
+        poke_list[poke.name] = poke
+
+    return poke_list
 
 ########
 # MAIN #
 ########
 
-moves = asyncio.run(import_all_moves())
-pokemon = ""
-"""
 
-pokemon_name = input("Input pokemon name: ").lower()
-pokemon_info = get_pokemon_info(pokemon_name)
+async def main():
+    moves = await import_all_moves()
+    #abilities = await import_all_abilities()
+    pokemon = await import_all_pokemon(moves)
 
-if pokemon_info:
-    print(pokemon_info.keys())
-    print("Stats:", pokemon_info["stats"])
-    print("Moves", pokemon_info['moves'])
+    for name, p in pokemon.items():
+        print(f"\n{name.upper()}")
+        print(f"ID: {p.id}")
+        print(f"HP: {p.hp} | ATK: {p.attack} | DEF: {p.defence}")
+        print(f"Special Attack: {p.special_attack} | Special Defence: {p.special_defence}")
+        print(f"Moves: {', '.join(p.moves.keys())}")
 
-    assign_pokemon(pokemon_info)
-else:
-    print("Pokémon not found or API error.")
 
-"""
+asyncio.run(main())
