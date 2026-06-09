@@ -132,7 +132,8 @@ def pokemon_data_class(data, moves):
         poke.id = p["id"]
         poke.name = p["name"]
         # poke.types = p["types"]
-        # Had to do it this way because of how it's written in the api
+
+        # Had to do stats this way because of how it's written in the api
         # i.e. {
         #       "base_stat": 45,
         #       "effort": 0,
@@ -141,16 +142,20 @@ def pokemon_data_class(data, moves):
         #         "url": "https://pokeapi.co/api/v2/stat/1/"
         #       }
         for poke_stat in p["stats"]:
-            if poke_stat["stat"]["name"] == "hp":
-                poke.hp = poke_stat["base_stat"]
-            if poke_stat["stat"]["name"] == "attack":
-                poke.attack = poke_stat["base_stat"]
-            if poke_stat["stat"]["name"] == "defense":
-                poke.defence = poke_stat["base_stat"]
-            if poke_stat["stat"]["name"] == "special-attack":
-                poke.special_attack = poke_stat["base_stat"]
-            if poke_stat["stat"]["name"] == "special-defense":
-                poke.special_defence = poke_stat["base_stat"]
+            match poke_stat["stat"]["name"]:
+                case "hp":
+                    poke.hp = poke_stat["base_stat"]
+                case "attack":
+                    poke.attack = poke_stat["base_stat"]
+                case "defense":
+                    poke.defence = poke_stat["base_stat"]
+                case "special-attack":
+                    poke.special_attack = poke_stat["base_stat"]
+                case "special-defense":
+                    poke.special_defence = poke_stat["base_stat"]
+                case _:
+                    pass
+
 
         for move_name in p["move_names"]:
             if move_name in moves:
