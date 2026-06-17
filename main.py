@@ -9,7 +9,7 @@ base_url = "https://pokeapi.co/api/v2"
 @dataclass
 class Pokemon:
     id: int = 0
-    name: str = ""
+    species_name: str = ""
     types: dict = field(default_factory=dict)
     hp: int = 0
     attack: int = 0
@@ -20,7 +20,7 @@ class Pokemon:
 
 @dataclass
 class Move:
-    name: str = ""
+    move_name: str = ""
     accuracy: int = 0
     damage_type: str = ""
 
@@ -71,10 +71,10 @@ def moves_data_class(data):
 
     for m in data["results"]:
         move = Move()
-        move.name = m["name"]
+        move.move_name = m["name"]
         move.accuracy = m["accuracy"]
         move.damage_type = m["damage_type"]
-        poke_moves[move.name] = move
+        poke_moves[move.move_name] = move
 
     return poke_moves
 
@@ -130,7 +130,7 @@ def pokemon_data_class(data, moves):
     for p in data["results"]:
         poke = Pokemon()
         poke.id = p["id"]
-        poke.name = p["name"]
+        poke.species_name = p["name"]
         # poke.types = p["types"]
 
         # Had to do stats this way because of how it's written in the api
@@ -161,19 +161,44 @@ def pokemon_data_class(data, moves):
             if move_name in moves:
                 poke.moves[move_name] = moves[move_name]
 
-        poke_list[poke.name] = poke
+        poke_list[poke.species_name] = poke
 
     return poke_list
+
+
+async def build_pokemon_moves_lookup(pokemon_db):
+    moves_lookup = {}
+
+    for pokemon in pokemon_db.values():
+        for move in pokemon.moves:
+            if move not in moves_lookup:
+                moves_lookup[move] = []
+            moves_lookup[move].append(pokemon)
+
+    return moves_lookup
+
+
 
 ########
 # MAIN #
 ########
 
-
 async def main():
-    moves = await import_all_moves()
+    moves_data = await import_all_moves()
     #abilities = await import_all_abilities()
-    pokemon = await import_all_pokemon(moves)
+    pokemon_data = await import_all_pokemon(moves_data)
+
+    moves_lookup = await build_pokemon_moves_lookup(pokemon_data)
+
+    while True:
+        move_search = input("Search for a move: ")
+        if move_search in moves_lookup:
+            print("The following pokemon can learn " + move_search + ":")
+            for pokemon in moves_lookup[move_search]:
+                print(pokemon.species_name)
+            print("\n")
+
+    """
 
     for name, p in pokemon.items():
         print(f"\n{name.upper()}")
@@ -181,6 +206,6 @@ async def main():
         print(f"HP: {p.hp} | ATK: {p.attack} | DEF: {p.defence}")
         print(f"Special Attack: {p.special_attack} | Special Defence: {p.special_defence}")
         print(f"Moves: {', '.join(p.moves.keys())}")
-
+    """
 
 asyncio.run(main())
