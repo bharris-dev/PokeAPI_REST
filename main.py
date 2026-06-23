@@ -166,7 +166,7 @@ def pokemon_data_class(data, moves):
     return poke_list
 
 
-async def build_pokemon_moves_lookup(pokemon_db):
+async def build_move_lookup(pokemon_db):
     moves_lookup = {}
 
     for pokemon in pokemon_db.values():
@@ -177,7 +177,16 @@ async def build_pokemon_moves_lookup(pokemon_db):
 
     return moves_lookup
 
+async def build_type_lookup(pokemon_db):
+    types_lookup = {}
 
+    for pokemon in pokemon_db.values():
+        for t in pokemon.types:
+            if t not in types_lookup:
+                types_lookup[t] = []
+            types_lookup[t].append(pokemon)
+
+    return types_lookup
 
 ########
 # MAIN #
@@ -188,13 +197,16 @@ async def main():
     #abilities = await import_all_abilities()
     pokemon_data = await import_all_pokemon(moves_data)
 
-    moves_lookup = await build_pokemon_moves_lookup(pokemon_data)
+    move_lookup = await build_move_lookup(pokemon_data)
+    type_lookup = await build_type_lookup(pokemon_data)
+
+    print(pokemon_data)
 
     while True:
         move_search = input("Search for a move: ")
-        if move_search in moves_lookup:
+        if move_search in move_lookup:
             print("The following pokemon can learn " + move_search + ":")
-            for pokemon in moves_lookup[move_search]:
+            for pokemon in move_lookup[move_search]:
                 print(pokemon.species_name)
             print("\n")
 
