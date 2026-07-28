@@ -8,15 +8,14 @@ base_url = "https://pokeapi.co/api/v2"
 
 @dataclass
 class Type:
-    id: int
-    type_name: str
-
+    id: int = 0
+    type_name: str = ""
     strengths: dict = field(default_factory = dict)
     weaknesses: dict = field(default_factory = dict)
     resistant_to: dict = field(default_factory = dict)
-    resisted_by: dict = field(default_factory=dict)
+    resisted_by: dict = field(default_factory = dict)
     immunities: dict = field(default_factory = dict)
-    no_effect: dict = field(default_factory=dict)
+    no_effect: dict = field(default_factory = dict)
 
 @dataclass
 class Pokemon:
@@ -29,6 +28,7 @@ class Pokemon:
     defence: int = 0
     special_defence: int = 0
     moves: dict = field(default_factory = dict)
+    sprite: str = ""
 
     def __str__(self):
         return (
@@ -49,7 +49,7 @@ class Move:
     damage_type: str = ""
 
 ##########################
-# General Data Functions #
+# General Helpers #
 ##########################
 
 def find_json_file(file_name):
@@ -252,7 +252,7 @@ async def import_all_pokemon(move_data, type_data):
 
         processed_data = []
 
-        # Goes through the unprocessed API data and only processes the Pokemon data that is relevant and saves it to local json.
+        # Goes through the unprocessed API data and only processes the Pokémon data that is relevant and saves it to local json.
         for api_data in details:
 
             pkmn = { "id": api_data["id"],
@@ -261,7 +261,8 @@ async def import_all_pokemon(move_data, type_data):
                      "types": [],
                      "stats": api_data["stats"],
                      "abilities": api_data["abilities"],
-                     "moves": []
+                     "moves": [],
+                     "sprite": api_data["sprites"]["front_default"]
             }
 
             for t in api_data["types"]:
@@ -285,6 +286,7 @@ def pokemon_data_class(data, move_data, type_data):
         poke = Pokemon()
         poke.id = p["id"]
         poke.species_name = p["name"]
+        poke.sprite = p["sprite"]
 
         # Had to do stats this way because of how it's written in the api
         # i.e. {
@@ -308,7 +310,6 @@ def pokemon_data_class(data, move_data, type_data):
                     poke.special_defence = poke_stat["base_stat"]
                 case _:
                     pass
-
 
         for move_name in p["moves"]:
             if move_name in move_data:
@@ -349,18 +350,42 @@ def build_type_lookup(pokemon_db):
 # MAIN #
 ########
 
-async def main():
+def pokemon_to_dict(pokemon):
+    return {
+        "id": pokemon.id,
+        "name": pokemon.species_name,
+        "hp": pokemon.hp,
+        "attack": pokemon.attack,
+        "defence": pokemon.defence,
+        "special_attack": pokemon.special_attack,
+        "special_defence": pokemon.special_defence,
+
+        "types": list(pokemon.types.keys()),
+        "moves": list(pokemon.moves.keys()),
+
+        "sprite": pokemon.sprite
+    }
+
+async def build_database():
     type_data = await import_all_types()
     moves_data = await import_all_moves()
-    #ability_data = await import_all_abilities()
     pokemon_data = await import_all_pokemon(moves_data, type_data)
 
     move_lookup = build_move_lookup(pokemon_data)
     type_lookup = build_type_lookup(pokemon_data)
 
-    main_menu(pokemon_data, move_lookup, type_lookup)
+    return {
+        "pokemon": pokemon_data,
+        "moves": move_lookup,
+        "types": type_lookup
+    }
 
-def main_menu(pokemon_data, move_lookup, type_lookup):
+
+
+
+
+# Legacy CLI code
+"""def main_menu(pokemon_data, move_lookup, type_lookup):
     while True:
         choice = input("choice: ")
         match choice:
@@ -396,8 +421,6 @@ def poke_menu(pokemon_list):
             print(pokemon_list[poke_search])
             print("\n")
 
-    """
-
     for name, p in pokemon.items():
         print(f"\n{name.upper()}")
         print(f"ID: {p.id}")
@@ -405,5 +428,3 @@ def poke_menu(pokemon_list):
         print(f"Special Attack: {p.special_attack} | Special Defence: {p.special_defence}")
         print(f"Moves: {', '.join(p.moves.keys())}")
     """
-
-asyncio.run(main())
